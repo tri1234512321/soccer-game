@@ -3,25 +3,9 @@ import math, sys, random
 from enum import Enum
 from pygame.math import Vector2
 
-# Check Python version number. sys.version_info gives version as a tuple, e.g. if (3,7,2,'final',0) for version 3.7.2.
-# Unlike many languages, Python can compare two tuples in the same way that you can compare numbers.
-if sys.version_info < (3,5):
-    print("This game requires at least version 3.5 of Python. Please download it from www.python.org")
-    sys.exit()
-
-# Check Pygame Zero version. This is a bit trickier because Pygame Zero only lets us get its version number as a string.
-# So we have to split the string into a list, using '.' as the character to split on. We convert each element of the
-# version number into an integer - but only if the string contains numbers and nothing else, because it's possible for
-# a component of the version to contain letters as well as numbers (e.g. '2.0.dev0')
-# We're using a Python feature called list comprehension - this is explained in the Bubble Bobble/Cavern chapter.
-pgzero_version = [int(s) if s.isnumeric() else s for s in pgzero.__version__.split('.')]
-if pgzero_version < [1,2]:
-    print("This game requires at least version 1.2 of Pygame Zero. You have version {0}. Please upgrade using the command 'pip3 install --upgrade pgzero'".format(pgzero.__version__))
-    sys.exit()
-
 WIDTH = 800
 HEIGHT = 480
-TITLE = "Substitute Soccer"
+TITLE = "Soccer"
 
 HALF_WINDOW_W = WIDTH / 2
 
@@ -54,7 +38,7 @@ AI_MAX_X = LEVEL_W - 78
 AI_MIN_Y = 98
 AI_MAX_Y = LEVEL_H - 98
 
-PLAYER_START_POS = [(350, 550), (650, 450), (200, 850), (500, 750), (800, 950), (350, 1250), (650, 1150)]
+PLAYER_START_POS = [(350, 550), (650, 450)]
 
 LEAD_DISTANCE_1 = 10
 LEAD_DISTANCE_2 = 50
@@ -104,8 +88,6 @@ def cos(x):
 
 # Convert a vector to an angle in the range 0 to 7
 def vec_to_angle(vec):
-    # todo explain a bit
-    # https://gamedev.stackexchange.com/questions/14602/what-are-atan-and-atan2-used-for-in-games
     return int(4 * math.atan2(vec.x, -vec.y) / math.pi + 8.5) % 8
 
 # Convert an angle  in the range 0 to 7 to a direction vector. We use -cos rather than cos as increasing angles move
@@ -238,7 +220,6 @@ class Ball(MyActor):
         self.owner = None
         self.timer = 0
 
-        self.shadow = MyActor("balls")
 
     # Check for collision with player p
     def collide(self, p):
@@ -297,8 +278,6 @@ class Ball(MyActor):
             self.vpos.x, self.vel.x = ball_physics(self.vpos.x, self.vel.x, bounds_x)
             self.vpos.y, self.vel.y = ball_physics(self.vpos.y, self.vel.y, bounds_y)
 
-        # Update shadow position to track ball
-        self.shadow.vpos = Vector2(self.vpos)
 
         # Search for a player that can acquire the ball
         for target in game.players:
@@ -471,7 +450,6 @@ class Player(MyActor):
 
         self.timer = 0
 
-        self.shadow = MyActor("blank", 0, 0, Player.ANCHOR)
 
         # Used when DEBUG_SHOW_TARGETS is on
         self.debug_target = Vector2(0, 0)
@@ -677,10 +655,7 @@ class Player(MyActor):
         suffix = str(self.dir) + str((int(self.anim_frame) // 18) + 1) # todo
 
         self.image = "player" + str(self.team) + suffix
-        self.shadow.image = "players" + suffix
-
-        # Update shadow position to track player
-        self.shadow.vpos = Vector2(self.vpos)
+        
 
 
 class Team:
@@ -831,9 +806,13 @@ class Game:
 
             # Either one or two players (depending on difficulty settings) follow the ball owner, one from up-field and
             # one from down-field of the owner
-            zipped[0].lead = LEAD_DISTANCE_1
+            try:
+                zipped[0].lead = LEAD_DISTANCE_1
+            except Exception: pass
             if self.difficulty.second_lead_enabled:
-                zipped[1].lead = LEAD_DISTANCE_2
+                try: 
+                    zipped[1].lead = LEAD_DISTANCE_2
+                except Exception: pass
 
             # If the ball has an owner, kick-off must have taken place, so unset the kickoff player
             # Of course, kick-off might have already taken place a while ago, in which case kick-off_player will already
@@ -888,12 +867,10 @@ class Game:
 
         # Prepare to draw all objects
         # 1. Create a list of all players and the ball, sorted based on their Y positions
-        # 2. Add object shadows to the list
-        # 3. Add the two goals at each end of the list
+        # 2. Add the two goals at each end of the list
         # (note - technically we're not adding items to the list in steps two and three, we're creating a new list
         # which consists of the old list plus the new items)
-        objects = sorted([self.ball] + self.players, key = lambda obj: obj.y)
-        objects = objects + [obj.shadow for obj in objects]
+        objects = sorted([self.ball] + self.players, key = lambda obj: obj.y)        
         objects = [self.goals[0]] + objects + [self.goals[1]]
 
         # Draw all objects

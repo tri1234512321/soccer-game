@@ -3,42 +3,41 @@ import math, sys, random
 from enum import Enum
 from pygame.math import Vector2
 
-WIDTH = 800
-HEIGHT = 480
-TITLE = "Soccer"
+WIDTH = 945
+HEIGHT = 650
+TITLE = "Substitute Soccer"
 
 HALF_WINDOW_W = WIDTH / 2
 
 # Size of level, including both the pitch and the boundary surrounding it
-LEVEL_W = 1000
-LEVEL_H = 1400
+LEVEL_W = 946
+LEVEL_H = 640
 HALF_LEVEL_W = LEVEL_W // 2
 HALF_LEVEL_H = LEVEL_H // 2
 
-HALF_PITCH_W = 442
-HALF_PITCH_H = 622
+HALF_PITCH_W = 423
+HALF_PITCH_H = 270
 
-GOAL_WIDTH = 186
+GOAL_WIDTH = 130
 GOAL_DEPTH = 20
 HALF_GOAL_W = GOAL_WIDTH // 2
 
 PITCH_BOUNDS_X = (HALF_LEVEL_W - HALF_PITCH_W, HALF_LEVEL_W + HALF_PITCH_W)
 PITCH_BOUNDS_Y = (HALF_LEVEL_H - HALF_PITCH_H, HALF_LEVEL_H + HALF_PITCH_H)
 
-GOAL_BOUNDS_X = (HALF_LEVEL_W - HALF_GOAL_W, HALF_LEVEL_W + HALF_GOAL_W)
-GOAL_BOUNDS_Y = (HALF_LEVEL_H - HALF_PITCH_H - GOAL_DEPTH,
-                 HALF_LEVEL_H + HALF_PITCH_H + GOAL_DEPTH)
+GOAL_BOUNDS_X = (HALF_LEVEL_W - HALF_PITCH_W - GOAL_DEPTH, HALF_LEVEL_W + HALF_PITCH_W + GOAL_DEPTH)
+GOAL_BOUNDS_Y = (HALF_LEVEL_H - HALF_GOAL_W, HALF_LEVEL_H + HALF_GOAL_W)
 
 PITCH_RECT = pygame.rect.Rect(PITCH_BOUNDS_X[0], PITCH_BOUNDS_Y[0], HALF_PITCH_W * 2, HALF_PITCH_H * 2)
-GOAL_0_RECT = pygame.rect.Rect(GOAL_BOUNDS_X[0], GOAL_BOUNDS_Y[0], GOAL_WIDTH, GOAL_DEPTH)
-GOAL_1_RECT = pygame.rect.Rect(GOAL_BOUNDS_X[0], GOAL_BOUNDS_Y[1] - GOAL_DEPTH, GOAL_WIDTH, GOAL_DEPTH)
+GOAL_0_RECT = pygame.rect.Rect(GOAL_BOUNDS_X[0], GOAL_BOUNDS_Y[0], GOAL_DEPTH, GOAL_WIDTH)
+GOAL_1_RECT = pygame.rect.Rect(GOAL_BOUNDS_X[1] - GOAL_DEPTH, GOAL_BOUNDS_Y[0], GOAL_DEPTH, GOAL_WIDTH)
 
-AI_MIN_X = 78
-AI_MAX_X = LEVEL_W - 78
-AI_MIN_Y = 98
-AI_MAX_Y = LEVEL_H - 98
+AI_MIN_X = PITCH_BOUNDS_X[0]
+AI_MAX_X = PITCH_BOUNDS_X[1]
+AI_MIN_Y = PITCH_BOUNDS_Y[0]
+AI_MAX_Y = PITCH_BOUNDS_Y[1]
 
-PLAYER_START_POS = [(350, 550), (650, 450)]
+PLAYER_START_POS = [(600, 200), (600, 400), (600, 500)]
 
 LEAD_DISTANCE_1 = 10
 LEAD_DISTANCE_2 = 50
@@ -47,12 +46,16 @@ DRIBBLE_DIST_X, DRIBBLE_DIST_Y = 18, 16
 
 # Speeds for players in various situations. Speeds including 'BASE' can be boosted by the speed_boost difficulty
 # setting (only for players on a computer-controlled team)
-PLAYER_DEFAULT_SPEED = 2
-CPU_PLAYER_WITH_BALL_BASE_SPEED = 2.6
-PLAYER_INTERCEPT_BALL_SPEED = 2.75
-LEAD_PLAYER_BASE_SPEED = 2.9
-HUMAN_PLAYER_WITH_BALL_SPEED = 3
-HUMAN_PLAYER_WITHOUT_BALL_SPEED = 3.3
+PLAYER_DEFAULT_SPEED = 1
+CPU_PLAYER_WITH_BALL_BASE_SPEED = 1.8
+PLAYER_INTERCEPT_BALL_SPEED = 1.9
+LEAD_PLAYER_BASE_SPEED = 2.1
+HUMAN_PLAYER_WITH_BALL_SPEED = 2
+HUMAN_PLAYER_WITHOUT_BALL_SPEED = 2.2
+
+# Ball physics model parameters
+KICK_STRENGTH = 5.5
+DRAG = 0.98
 
 DEBUG_SHOW_LEADS = False
 DEBUG_SHOW_TARGETS = False
@@ -88,6 +91,8 @@ def cos(x):
 
 # Convert a vector to an angle in the range 0 to 7
 def vec_to_angle(vec):
+    # todo explain a bit
+    # https://gamedev.stackexchange.com/questions/14602/what-are-atan-and-atan2-used-for-in-games
     return int(4 * math.atan2(vec.x, -vec.y) / math.pi + 8.5) % 8
 
 # Convert an angle  in the range 0 to 7 to a direction vector. We use -cos rather than cos as increasing angles move
@@ -127,10 +132,6 @@ class MyActor(Actor):
         self.pos = (self.vpos.x - offset_x, self.vpos.y - offset_y)
         super().draw()
 
-# Ball physics model parameters
-KICK_STRENGTH = 11.5
-DRAG = 0.98
-
 # ball physics for one axis
 def ball_physics(pos, vel, bounds):
     # Add velocity to position
@@ -156,15 +157,15 @@ def steps(distance):
 
 class Goal(MyActor):
     def __init__(self, team):
-        x = HALF_LEVEL_W
-        y = 0 if team == 0 else LEVEL_H
-        super().__init__("goal" + str(team), x, y)
+        x = 0 if team == 0 else LEVEL_W
+        y = HALF_LEVEL_H
+        self.vpos = Vector2(0, 0)
 
         self.team = team
 
     def active(self):
         # Is ball within 500 pixels on the Y axis?
-        return abs(game.ball.vpos.y - self.vpos.y) < 500
+        return abs(game.ball.vpos.x - self.vpos.x) < 500
 
 # Calculate if player 'target' is a good target for a pass from player 'source'
 # target can also be a goal
@@ -220,7 +221,6 @@ class Ball(MyActor):
         self.owner = None
         self.timer = 0
 
-
     # Check for collision with player p
     def collide(self, p):
         # The ball collides with p if p's hold-off timer has expired
@@ -262,22 +262,21 @@ class Ball(MyActor):
             # If ball is vertically inside the goal, it can only go as far as the
             # sides of the goal - otherwise it can go all the way to the sides of
             # the pitch
-            if abs(self.vpos.y - HALF_LEVEL_H) > HALF_PITCH_H:
-                bounds_x = GOAL_BOUNDS_X
-            else:
-                bounds_x = PITCH_BOUNDS_X
-
-            # If ball is horizontally inside the goal, it can go all the way to
-            # the back of the net - otherwise it can only go up to the end of
-            # the pitch
-            if abs(self.vpos.x - HALF_LEVEL_W) < HALF_GOAL_W:
+            if abs(self.vpos.x - HALF_LEVEL_W) > HALF_PITCH_W:
                 bounds_y = GOAL_BOUNDS_Y
             else:
                 bounds_y = PITCH_BOUNDS_Y
 
+            # If ball is horizontally inside the goal, it can go all the way to
+            # the back of the net - otherwise it can only go up to the end of
+            # the pitch
+            if abs(self.vpos.y - HALF_LEVEL_H) < HALF_GOAL_W:
+                bounds_x = GOAL_BOUNDS_X
+            else:
+                bounds_x = PITCH_BOUNDS_X
+
             self.vpos.x, self.vel.x = ball_physics(self.vpos.x, self.vel.x, bounds_x)
             self.vpos.y, self.vel.y = ball_physics(self.vpos.y, self.vel.y, bounds_y)
-
 
         # Search for a player that can acquire the ball
         for target in game.players:
@@ -381,19 +380,19 @@ class Ball(MyActor):
 # Return True if the given position is inside the level area, otherwise False
 # Takes the goals into account so you can't run through them
 def allow_movement(x, y):
-    if abs(x - HALF_LEVEL_W) > HALF_LEVEL_W:
+    if abs(y - HALF_LEVEL_H) > HALF_LEVEL_H:
         # Trying to walk off the left or right side of the level
         return False
 
-    elif abs(x - HALF_LEVEL_W) < HALF_GOAL_W + 20:
+    elif abs(y - HALF_LEVEL_H) < HALF_GOAL_W + 20:
         # Player is within the bounds of the goals on the X axis, don't let them walk into, through or behind the goal
         # +20 takes with of player sprite into account
-        return abs(y - HALF_LEVEL_H) < HALF_PITCH_H
+        return abs(x - HALF_LEVEL_W) < HALF_PITCH_W
 
     else:
         # Player is outside the bounds of the goals on the X axis, so they can walk off the pitch and to the edge
         # of the level
-        return abs(y - HALF_LEVEL_H) < HALF_LEVEL_H
+        return abs(x - HALF_LEVEL_W) < HALF_LEVEL_W
 
 # Generate a score for a given position, where lower numbers are considered to be better.
 # This is called when a computer-controlled player with the ball is working out which direction to run in, or whether
@@ -407,13 +406,13 @@ def cost(pos, team, handicap=0):
     # Get pos of our own goal. We do it this way rather than getting the pos of the actual goal object
     # because this way gives us the pos of the goal's entrance, whereas the actual goal sprites are not anchored based
     # on the entrances.
-    own_goal_pos = Vector2(HALF_LEVEL_W, 78 if team == 1 else LEVEL_H - 78)
+    own_goal_pos = Vector2(78 if team == 1 else LEVEL_W - 78, HALF_LEVEL_H)
     inverse_own_goal_distance = 3500 / (pos - own_goal_pos).length()
 
     result = inverse_own_goal_distance \
             + sum([4000 / max(24, (p.vpos - pos).length()) for p in game.players if p.team != team]) \
-            + ((pos.x - HALF_LEVEL_W)**2 / 200 \
-            - pos.y * (4 * team - 2)) \
+            + ((pos.y - HALF_LEVEL_H)**2 / 200 \
+            - pos.x * (4 * team - 2)) \
             + handicap
 
     return result, pos
@@ -431,10 +430,10 @@ class Player(MyActor):
 
         # Calculate our initial position for kickoff by halving y, adding 550 and then subtracting either 400 for
         # team 1, or nothing for team 0
-        kickoff_y = (y / 2) + 550 - (team * 400)
+        kickoff_x = (x / 2) + 400 - (team * 250)
 
         # Call the constructor of the parent class (MyActor)
-        super().__init__("blank", x, kickoff_y, Player.ANCHOR)
+        super().__init__("blank", kickoff_x, y, Player.ANCHOR)
 
         # Remember home position, where we'll stand by default if we're not active (i.e. far from the ball)
         self.home = Vector2(x, y)
@@ -450,7 +449,6 @@ class Player(MyActor):
 
         self.timer = 0
 
-
         # Used when DEBUG_SHOW_TARGETS is on
         self.debug_target = Vector2(0, 0)
 
@@ -458,7 +456,7 @@ class Player(MyActor):
         # Is ball within 400 pixels on the Y axis? If so I'll be considered active, meaning I'm currently doing
         # something useful in the game like trying to get the ball. If I'm not active, I'll either mark another player,
         # or just stay at my home position
-        return abs(game.ball.vpos.y - self.home.y) < 400
+        return abs(game.ball.vpos.x - self.home.x) < 400
 
     def update(self):
         # decrement holdoff timer
@@ -533,8 +531,8 @@ class Player(MyActor):
                     # 400 pixels ahead of the ball. Team 0 are trying to score in the goal at the top of the
                     # pitch, team 1 the goal at the bottom
                     direction = -1 if self.team == 0 else 1
-                    target.x = (ball.vpos.x + target.x) / 2
-                    target.y = (ball.vpos.y + 400 * direction + target.y) / 2
+                    target.x = (ball.vpos.x + 400 * direction + target.x) / 2
+                    target.y = (ball.vpos.y + target.y) / 2
                 # If we're not active, we'll do the default action of moving towards our home position
             else:
                 # Ball is owned by a player on the opposite team
@@ -657,7 +655,6 @@ class Player(MyActor):
         self.image = "player" + str(self.team) + suffix
         
 
-
 class Team:
     def __init__(self, controls):
         self.controls = controls
@@ -705,7 +702,7 @@ class Game:
             # For each entry in pos, create one player for each team - positions are flipped (both horizontally and
             # vertically) versions of each other
             self.players.append(Player(random_offset(pos[0]), random_offset(pos[1]), 0))
-            self.players.append(Player(random_offset(LEVEL_W - pos[0]), random_offset(LEVEL_H - pos[1]), 1))
+            self.players.append(Player(random_offset(WIDTH - pos[0]), random_offset(HEIGHT - pos[1]), 1))
 
         # Players in the list are stored in an alternating fashion - a team 0 player, then a team 1 player, and so on.
         # The peer for each player is the opposing team player at the opposite end of the list. As there are 14 players
@@ -730,13 +727,10 @@ class Game:
         self.kickoff_player = self.players[other_team]
 
         # Set pos of kickoff player. A team 0 player will stand to the left of the ball, team 1 on the right
-        self.kickoff_player.vpos = Vector2(HALF_LEVEL_W - 30 + other_team * 60, HALF_LEVEL_H)
+        self.kickoff_player.vpos = Vector2(HALF_LEVEL_W, HALF_LEVEL_H - 30 + other_team * 60)
 
         # Create ball
         self.ball = Ball()
-
-        # Focus camera on ball - copy ball pos
-        self.camera_focus = Vector2(self.ball.vpos)
 
         self.debug_shoot_target = None
 
@@ -747,10 +741,10 @@ class Game:
             # Reset for new kick-off after goal scored
             self.reset()
 
-        elif self.score_timer < 0 and abs(self.ball.vpos.y - HALF_LEVEL_H) > HALF_PITCH_H:
+        elif self.score_timer < 0 and abs(self.ball.vpos.x - HALF_LEVEL_W) > HALF_PITCH_W:
             game.play_sound("goal", 2)
 
-            self.scoring_team = 0 if self.ball.vpos.y < HALF_LEVEL_H else 1
+            self.scoring_team = 0 if self.ball.vpos.x < HALF_LEVEL_W else 1
             self.teams[self.scoring_team].score += 1
             self.score_timer = 60      # Game goes into "scored a goal" state for 60 frames
 
@@ -809,6 +803,7 @@ class Game:
             try:
                 zipped[0].lead = LEAD_DISTANCE_1
             except Exception: pass
+            
             if self.difficulty.second_lead_enabled:
                 try: 
                     zipped[1].lead = LEAD_DISTANCE_2
@@ -843,7 +838,7 @@ class Game:
                     # Thonny gives a warning about the following line, relating to closures (an advanced topic), but
                     # in this case there is not actually a problem as the closure is only called within the loop
                     goal_dir = (2 * team_num - 1)
-                    if owner and (p.vpos.y - self.ball.vpos.y) * goal_dir < 0:
+                    if owner and (p.vpos.x - self.ball.vpos.x) * goal_dir < 0:
                         return dist_to_ball / 2
                     else:
                         return dist_to_ball
@@ -851,37 +846,26 @@ class Game:
                 self.teams[team_num].active_control_player = min([p for p in game.players if p.team == team_num],
                                                                  key = dist_key_weighted)
 
-        # Get vector between current camera pos and ball pos
-        camera_ball_vec, distance = safe_normalise(self.camera_focus - self.ball.vpos)
-        if distance > 0:
-            # Move camera towards ball, at no more than 8 pixels per frame
-            self.camera_focus -= camera_ball_vec * min(distance, 8)
-
     def draw(self):
-        # For the purpose of scrolling, all objects will be drawn with these offsets
-        offset_x = max(0, min(LEVEL_W - WIDTH, self.camera_focus.x - WIDTH / 2))
-        offset_y = max(0, min(LEVEL_H - HEIGHT, self.camera_focus.y - HEIGHT / 2))
-        offset = Vector2(offset_x, offset_y)
 
-        screen.blit("pitch", (-offset_x, -offset_y))
+        screen.blit("pitch", (0, 0))
 
         # Prepare to draw all objects
         # 1. Create a list of all players and the ball, sorted based on their Y positions
         # 2. Add the two goals at each end of the list
         # (note - technically we're not adding items to the list in steps two and three, we're creating a new list
         # which consists of the old list plus the new items)
-        objects = sorted([self.ball] + self.players, key = lambda obj: obj.y)        
-        objects = [self.goals[0]] + objects + [self.goals[1]]
+        objects = sorted([self.ball] + self.players, key = lambda obj: obj.x)        
 
         # Draw all objects
         for obj in objects:
-            obj.draw(offset_x, offset_y)
+            obj.draw(0, 0)
 
         # Show active players
         for t in range(2):
             # Only show arrow for human teams
             if self.teams[t].human():
-                arrow_pos = self.teams[t].active_control_player.vpos - offset - Vector2(11, 45)
+                arrow_pos = self.teams[t].active_control_player.vpos - Vector2(11, 45)
                 screen.blit("arrow" + str(t), arrow_pos)
 
         if DEBUG_SHOW_LEADS:

@@ -1041,7 +1041,8 @@ def draw():
             image = "menu0" + str(menu_num_players)
         else:
             image = "menu1" + str(menu_difficulty)
-        screen.blit(image, (0, 0))
+        
+        screen.blit(image, (70, 80))
 
     elif state == State.PLAY:
         # Display score bar at top
@@ -1058,7 +1059,7 @@ def draw():
     elif state == State.GAME_OVER:
         # Display "Game Over" image
         img = "over" + str(int(game.teams[1].score > game.teams[0].score))
-        screen.blit(img, (0, 0))
+        screen.blit(img, (70, 80))
 
         # Show score for each team
         for i in range(2):

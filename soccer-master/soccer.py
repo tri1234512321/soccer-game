@@ -3,8 +3,8 @@ import math, sys, random
 from enum import Enum
 from pygame.math import Vector2
 
-WIDTH = 945
-HEIGHT = 650
+WIDTH = 946
+HEIGHT = 640
 TITLE = "Substitute Soccer"
 
 HALF_WINDOW_W = WIDTH / 2
@@ -1015,8 +1015,8 @@ def update():
         game.update()
 
     elif state == State.PLAY:
-        # First player to 9 wins
-        if max([team.score for team in game.teams]) == 9 and game.score_timer == 1:
+        # First player to 3 wins
+        if max([team.score for team in game.teams]) == 3 and game.score_timer == 1:
             state = State.GAME_OVER
         else:
             game.update()
@@ -1038,11 +1038,13 @@ def draw():
         # is selected; 10, 11 and 12 are for the difficulty selection screen -
         # easy, medium or hard
         if menu_state == MenuState.NUM_PLAYERS:
-            image = "menu0" + str(menu_num_players)
+            images = "images\menu0" + str(menu_num_players) + ".png"
         else:
-            image = "menu1" + str(menu_difficulty)
+            images = "images\menu1" + str(menu_difficulty) + ".png"
         
-        screen.blit(image, (70, 80))
+        picture = pygame.image.load(images)
+        picture = pygame.transform.scale(picture, (946, 640))
+        screen.blit(picture, (0, 0))
 
     elif state == State.PLAY:
         # Display score bar at top
@@ -1058,8 +1060,11 @@ def draw():
 
     elif state == State.GAME_OVER:
         # Display "Game Over" image
-        img = "over" + str(int(game.teams[1].score > game.teams[0].score))
-        screen.blit(img, (70, 80))
+        img = "images\over" + str(int(game.teams[1].score > game.teams[0].score)) +".png"
+        
+        picture = pygame.image.load(img)
+        picture = pygame.transform.scale(picture, (946, 640))
+        screen.blit(picture, (0, 0))
 
         # Show score for each team
         for i in range(2):
